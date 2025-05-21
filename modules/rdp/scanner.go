@@ -212,16 +212,12 @@ func (scanner *Scanner) GetDialerGroupConfig() *zgrab2.DialerGroupConfig {
 //
 // Note: We stop before authentication to gather information without logging in
 func (scanner *Scanner) Scan(ctx context.Context, dialGroup *zgrab2.DialerGroup, target *zgrab2.ScanTarget) (zgrab2.ScanStatus, any, error) {
-	// TODO: Send Client Hello after negotiation (maybe) (TLS)
-
 	// Get the TCP Layer (4) dialer from dialer group
 	// RDP requires TCP, so we need an L4 dialer
 	l4Dialer := dialGroup.L4Dialer
 	if l4Dialer == nil {
 		return zgrab2.SCAN_INVALID_INPUTS, nil, errors.New("no L4 dialer found. RDP requires a L4 dialer")
 	}
-
-	// TODO: if TLS is enabled, wrap the TCP connection in a TLS session (?)
 
 	// Establish TCP connection to target
 	// Convert target.IP to string since JoinHostPort expects string
@@ -282,6 +278,9 @@ func (scanner *Scanner) Scan(ctx context.Context, dialGroup *zgrab2.DialerGroup,
 	result.GraphicPipelinesExtensionProtocalSupported = parsed.Flags&0x02 != 0
 	result.RestrictedAdminModeSupported = parsed.Flags&0x04 != 0
 	result.RestrictedAuthenticationModeSupported = parsed.Flags&0x08 != 0
+
+	// TODO: Send Client Hello after negotiation (maybe) (TLS)
+	// TODO: if TLS is enabled, wrap the TCP connection in a TLS session (?)
 
 	return zgrab2.SCAN_SUCCESS, result, nil
 }
