@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/zmap/zgrab2"
@@ -207,8 +208,7 @@ func (scanner *Scanner) GetDialerGroupConfig() *zgrab2.DialerGroupConfig {
 //  2. If --force-tls is set, perform a TLS handshake
 //  3. Perform RDP protocol negotiation (X.224)
 //  4. If --send-security-protocol is set, specify the security protocol (embedded in the RDP Negotiation Request)
-//  5. If --send-client-protocol is set, send client protocol negotiation (TODO: huh?)
-//  6. Close the connection
+//  5. Close the connection
 //
 // Note: We stop before authentication to gather information without logging in
 func (scanner *Scanner) Scan(ctx context.Context, dialGroup *zgrab2.DialerGroup, target *zgrab2.ScanTarget) (zgrab2.ScanStatus, any, error) {
@@ -287,19 +287,39 @@ func (scanner *Scanner) Scan(ctx context.Context, dialGroup *zgrab2.DialerGroup,
 }
 
 // Helper function to convert protocol number to string
+// getProtocolString converts a protocol bitmask to a human-readable string representation
+// of the RDP security protocols. The protocol parameter is a bitmask where each bit
+// represents a different security protocol:
+// 0x00000001 - SSL/TLS
+// 0x00000002 - CredSSP
+// 0x00000008 - RDSTLS
+// 0x00000000 - Standard RDP Security (no additional protocols)
 func getProtocolString(protocol uint32) string {
-	switch protocol {
-	case 0x00000000:
-		return "Standard RDP security"
-	case 0x00000001:
-		return "SSL/TLS"
-	case 0x00000002:
-		return "CredSSP"
-	case 0x00000003:
-		return "SSL/TLS + CredSSP (Hybrid)"
-	default:
+	// Initialize an empty slice to store the protocol names
+	var protocols []string
+
+	// Check if SSL/TLS is enabled (bit 0)
+	if protocol&0x00000001 != 0 {
+		protocols = append(protocols, "SSL/TLS")
+	}
+	// Check if CredSSP is enabled (bit 1)
+	if protocol&0x00000002 != 0 {
+		protocols = append(protocols, "CredSSP")
+	}
+	// Check if RDSTLS is enabled (bit 3)
+	if protocol&0x00000008 != 0 {
+		protocols = append(protocols, "RDSTLS")
+	}
+	// If no protocols are specified (0x00000000), return Standard RDP Security
+	if protocol == 0x00000000 {
+		return "Standard RDP Security"
+	}
+	// If no known protocols were found in the bitmask, return Unknown
+	if len(protocols) == 0 {
 		return fmt.Sprintf("Unknown protocol (0x%08x)", protocol)
 	}
+	// Join all found protocols with " + " and return the combined string
+	return strings.Join(protocols, " + ")
 }
 
 func buildRDPNegotiationRequest() []byte {
@@ -317,7 +337,8 @@ func buildRDPNegotiationRequest() []byte {
 		// RDP Negotiation Request (8 bytes)
 		0x01, 0x00, // Type: 0x01 (RDP Negotiation Request)
 		0x08, 0x00, // Length: 8 bytes
-		0x0b, 0x00, 0x00, 0x00, // RequestedProtocols: SSL | HYBRID | RDSTLS (0x0B) LE
+		// TODO: maybe change this default
+		0x0b, 0x00, 0x00, 0x00, // RequestedProtocols: Defaulting to SSL | HYBRID | RDSTLS (0x0B)
 	}
 }
 
